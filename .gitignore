@@ -71,3 +71,7 @@ yarn-error.log
 
 # Ignore local test/credentials
 *.local.*
+
+#Ignore font file
+*.ttf
+!/font/HYFengBoMoJiTuo-75U.ttf
