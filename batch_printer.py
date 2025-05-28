@@ -130,10 +130,18 @@ def main():
 
     os.makedirs(done_root, exist_ok=True)
 
+    # 获取当前程序所在的目录（兼容 .py 和 .exe）
+    base_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
+
+    # 构建日志目录路径
+    log_dir = os.path.join(base_dir, "logs")
+    os.makedirs(log_dir, exist_ok=True)
+
     # 初始化日志文件
     log_filename = datetime.now().strftime("log_%Y-%m-%d_%H-%M-%S.log")
+    log_path = os.path.join(log_dir, log_filename)
     logging.basicConfig(
-        filename=log_filename,
+        filename=log_path,
         level=logging.INFO,
         format='%(asctime)s - %(levelname)s - %(message)s',
         encoding='utf-8'

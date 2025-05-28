@@ -75,3 +75,4 @@ yarn-error.log
 #Ignore font file
 *.ttf
 !/font/HYFengBoMoJiTuo-75U.ttf
+!/dist/logs/
