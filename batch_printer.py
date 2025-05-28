@@ -32,6 +32,15 @@ def print_excel(file_path):
     workbook = None
     try:
         workbook = excel.Workbooks.Open(file_path, ReadOnly=True)
+
+        for sheet in workbook.Sheets:
+            # 设置打印纸张为 A4（枚举值 9），其他常见值见下方
+            sheet.PageSetup.PaperSize = 132  # A4
+            # 设置为缩放：1 页宽，1 页高（即适应一页打印）
+            sheet.PageSetup.Zoom = 75
+            sheet.PageSetup.FitToPagesWide = 1
+            sheet.PageSetup.FitToPagesTall = 1
+
         workbook.PrintOut()
         print("✅ Excel 打印成功")
     except Exception as e:
