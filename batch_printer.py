@@ -10,76 +10,117 @@ import logging
 from datetime import datetime
 import configparser
 
-# 设置打印机名称
+# 省略 imports，与你一致
+
+# 全局变量
 DEFAULT_PRINTER = win32print.GetDefaultPrinter()
+MONTHLY_PRINTER_NAME = ""
+DEFAULT_PAPER_SIZE = 9
+DEFAULT_PAPER_ZOOM = 75
+DELAY_SECONDS = 5
 
 
 def is_monthly_file(filename):
     return "月结单" in filename
 
 
-# === 打印 PDF 文件 ===
-def print_pdf(file_path, use_alt_printer=False):
-    logging.info(f"📊️ 打印 PDF: {file_path}")
-    printer_name = MONTHLY_PRINTER_NAME if use_alt_printer else DEFAULT_PRINTER
-    logging.info(f"🖨️ 打印机: {printer_name}")
+def setup_logging(log_dir):
+    os.makedirs(log_dir, exist_ok=True)
+    log_filename = datetime.now().strftime("log_%Y-%m-%d_%H-%M-%S.log")
+    log_path = os.path.join(log_dir, log_filename)
+
+    logging.basicConfig(
+        filename=log_path,
+        level=logging.INFO,
+        format="%(asctime)s - %(levelname)s - %(message)s",
+        encoding="utf-8"
+    )
+
+    console = logging.StreamHandler()
+    console.setLevel(logging.INFO)
+    formatter = logging.Formatter('%(asctime)s - %(message)s')
+    console.setFormatter(formatter)
+    logging.getLogger().addHandler(console)
+
+
+def read_config(config_path):
+    config = configparser.ConfigParser()
+    config.read(config_path, encoding="utf-8")
+
+    global MONTHLY_PRINTER_NAME, DEFAULT_PAPER_SIZE, DEFAULT_PAPER_ZOOM, DELAY_SECONDS
+
+    source = config.get("settings", "source_dir")
+    target = config.get("settings", "target_dir")
+    MONTHLY_PRINTER_NAME = config.get("settings", "monthly_printer_name")
+    DEFAULT_PAPER_SIZE = int(config.get("settings", "default_paper_size"))
+    DEFAULT_PAPER_ZOOM = int(config.get("settings", "default_paper_zoom"))
+    DELAY_SECONDS = float(config.get("settings", "delay_seconds"))
+
+    logging.info(f"-------------------------")
+    logging.info(f"⚙️ 配置文件信息:")
+    logging.info(f"📂 源目录: {source}")
+    logging.info(f"📂 保存目录: {target}")
+    logging.info(f"🖨️ 月结单使用的打印机名称️: {MONTHLY_PRINTER_NAME}")
+    logging.info(f"📄 针式打印机纸张编号: {DEFAULT_PAPER_SIZE}")
+    logging.info(f"📄 针式打印机打印缩放比例: {DEFAULT_PAPER_ZOOM}")
+    logging.info(f"📄 打印间隔: {DELAY_SECONDS}")
+    logging.info(f"-------------------------")
+
+    return source, target
+
+
+def print_pdf(path, use_alt=False):
+    printer = MONTHLY_PRINTER_NAME if use_alt else DEFAULT_PRINTER
+
+    logging.info(f"📄 打印 PDF: {path}")
+    logging.info(f"🖨️ 打印机: {printer}")
+
     try:
-        win32api.ShellExecute(
-            0,
-            "print",
-            file_path,
-            f'/d:"{printer_name}"',
-            ".",
-            0
-        )
-        logging.info("✅ PDF 打印成功")
+        win32api.ShellExecute(0, "print", path, f'/d:"{printer}"', ".", 0)
+        logging.info(f"✅ 打印成功 (PDF)")
+        return True
     except Exception as e:
-        logging.info(f"❌ PDF 打印失败: {e}")
+        logging.error(f"❌ 打印失败 (PDF): {e}")
+        return False
 
-    return True
 
+def print_excel(path, use_alt=False):
+    printer = MONTHLY_PRINTER_NAME if use_alt else DEFAULT_PRINTER
 
-# === 打印 Excel 文件 ===
-def print_excel(file_path, use_alt_printer=False):
-    logging.info(f"📊 打印 Excel: {file_path}")
-    printer_name = MONTHLY_PRINTER_NAME if use_alt_printer else DEFAULT_PRINTER
-    logging.info(f"🖨️ 打印机: {printer_name}")
+    logging.info(f"📊 打印 Excel: {path}")
+    logging.info(f"🖨️ 打印机: {printer}")
 
     pythoncom.CoInitialize()
     excel = win32com.client.Dispatch("Excel.Application")
     excel.Visible = False
     excel.DisplayAlerts = False
-    workbook = None
-    try:
-        workbook = excel.Workbooks.Open(file_path, ReadOnly=True)
 
-        for sheet in workbook.Sheets:
-            if use_alt_printer:
-                # 设置打印纸张为 A4（枚举值 9），其他常见值见下方
+    try:
+        wb = excel.Workbooks.Open(path, ReadOnly=True)
+        for sheet in wb.Sheets:
+            if use_alt:
                 sheet.PageSetup.PaperSize = 9  # A4
-                # 设置为缩放：1 页宽，1 页高（即适应一页打印）
                 sheet.PageSetup.Zoom = False
                 sheet.PageSetup.FitToPagesWide = 1
                 sheet.PageSetup.FitToPagesTall = 1
             else:
-                # 设置打印纸张为 A4（枚举值 9），其他常见值见下方
                 try:
                     sheet.PageSetup.PaperSize = DEFAULT_PAPER_SIZE  # 132列纸
                 except:
                     sheet.PageSetup.PaperSize = 9  # A4
-                # 设置为缩放：75% 不缩放
-                sheet.PageSetup.Zoom = 75
+                sheet.PageSetup.Zoom = DEFAULT_PAPER_ZOOM
                 sheet.PageSetup.FitToPagesWide = False
                 sheet.PageSetup.FitToPagesTall = False
 
-        workbook.PrintOut(ActivePrinter=printer_name)
-        logging.info(f"✅ Excel 打印成功")
+        wb.PrintOut(ActivePrinter=printer)
+        logging.info(f"✅ 打印成功 (Excel)")
+        return True
     except Exception as e:
-        logging.info(f"❌ Excel 打印失败: {file_path}\n   原因: {e}")
+        logging.error(f"❌ 打印失败 (Excel): {e}")
+        return False
     finally:
         try:
-            if workbook:
-                workbook.Close(False)
+            wb.Close(False)
         except:
             pass
         try:
@@ -88,148 +129,63 @@ def print_excel(file_path, use_alt_printer=False):
             pass
         pythoncom.CoUninitialize()
 
-    return True
+
+def move_and_cleanup(src_file, src_root, target_root):
+    rel_path = os.path.relpath(src_file, src_root)
+    dest_file = os.path.join(target_root, rel_path)
+    os.makedirs(os.path.dirname(dest_file), exist_ok=True)
+    shutil.move(src_file, dest_file)
+    logging.info(f"📁 已移动文件: {dest_file}")
+
+    # 删除空目录
+    src_dir = os.path.dirname(src_file)
+    if not any(f for f in os.listdir(src_dir) if not f.startswith("~$")):
+        try:
+            os.rmdir(src_dir)
+            logging.info(f"🗑️ 删除空目录: {src_dir}")
+        except Exception as e:
+            logging.warning(f"⚠️ 删除目录失败: {src_dir} - {e}")
+
+    # 打印一个空行
+    logging.warning(f"")
 
 
-# === 移动文件，保持目录结构 ===
-def move_file_preserve_structure(src_file, src_root, dest_root):
-    relative_path = os.path.relpath(src_file, src_root)
-    dest_path = os.path.join(dest_root, relative_path)
-    dest_dir = os.path.dirname(dest_path)
-    os.makedirs(dest_dir, exist_ok=True)
-    shutil.move(src_file, dest_path)
-    logging.info(f"📁 文件已移动至: {dest_path}")
-
-
-def delete_if_empty(dir_path):
-    try:
-        files = [f for f in os.listdir(dir_path) if not f.startswith("~$")]
-        if not files:
-            os.rmdir(dir_path)
-            logging.info(f"🗑️ 删除空目录: {dir_path}")
-            # 向上递归删除空目录
-            parent = os.path.dirname(dir_path)
-            if os.path.isdir(parent) and parent != dir_path:
-                delete_if_empty(parent)
-    except Exception as e:
-        logging.info(f"⚠️ 删除目录失败 {dir_path}: {e}")
-
-
-# === 主函数 ===
 def main():
-
-    # 获取当前程序所在的目录（兼容 .py 和 .exe）
     base_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
-
-    # 构建日志目录路径
-    log_dir = os.path.join(base_dir, "logs")
-    os.makedirs(log_dir, exist_ok=True)
-
-    # 初始化日志文件
-    log_filename = datetime.now().strftime("log_%Y-%m-%d_%H-%M-%S.log")
-    log_path = os.path.join(log_dir, log_filename)
-    logging.basicConfig(
-        filename=log_path,
-        level=logging.INFO,
-        format='%(asctime)s - %(levelname)s - %(message)s',
-        encoding='utf-8'
-    )
-
-    # 将日志输出同时发送到控制台
-    console = logging.StreamHandler()
-    console.setLevel(logging.INFO)
-    formatter = logging.Formatter('%(asctime)s - %(message)s')
-    console.setFormatter(formatter)
-    logging.getLogger().addHandler(console)
-
-    # -start- 以下为读取命令行参数形式
-    # if len(sys.argv) < 3:
-    #     logging.info("❗ 用法: python batch_printer_recursive_move.py <源目录> <打印成功保存目录>")
-    #     sys.exit(1)
-    #
-    # source_root = sys.argv[1]
-    # target_root = sys.argv[2]
-    #
-    # if not os.path.exists(source_root):
-    #     logging.info(f"❌ 源目录不存在: {source_root}")
-    #     sys.exit(1)
-    #
-    # -end- 以下为读取命令行参数形式
-
-    # -start- 以下为读取 ini 配置文件格式
-    # 获取程序所在目录（兼容 .exe 和 .py）
-    base_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
-
-    # 读取 INI 配置文件
     config_path = os.path.join(base_dir, "config.ini")
+    log_dir = os.path.join(base_dir, "logs")
+
     if not os.path.exists(config_path):
         print(f"❌ 配置文件不存在: {config_path}")
-        sys.exit(1)
+        return
 
-    config = configparser.ConfigParser()
-    config.read(config_path, encoding='utf-8')
+    setup_logging(log_dir)
 
-    try:
-        source_root = config.get("settings", "source_dir")
-        target_root = config.get("settings", "target_dir")
+    source_root, target_root = read_config(config_path)
+    logging.info(f"📂 监听目录: {source_root}")
+    logging.info(f"📁 目标目录: {target_root}")
 
-        global MONTHLY_PRINTER_NAME, DEFAULT_PAPER_SIZE, DEFAULT_PAPER_ZOOM, DELAY_SECONDS
-        MONTHLY_PRINTER_NAME = config.get("settings", "monthly_printer_name")
-        DEFAULT_PAPER_SIZE = config.get("settings", "default_paper_size")
-        DEFAULT_PAPER_ZOOM = config.get("settings", "default_paper_zoom")
-        DELAY_SECONDS = config.get("settings", "delay_seconds")
-
-        logging.info(f"-------------------------")
-        logging.info(f"⚙️ 配置文件信息:")
-        logging.info(f"📂 源目录: {source_root}")
-        logging.info(f"📂 保存目录: {target_root}")
-        logging.info(f"🖨️ 月结单使用的打印机名称️: {MONTHLY_PRINTER_NAME}")
-        logging.info(f"📄 针式打印机纸张编号: {DEFAULT_PAPER_SIZE}")
-        logging.info(f"📄 针式打印机打印缩放比例: {DEFAULT_PAPER_ZOOM}")
-        logging.info(f"📄 打印间隔: {DELAY_SECONDS}")
-        logging.info(f"-------------------------")
-
-    except configparser.Error as e:
-        logging.info(f"❌ 配置文件读取错误: {e}")
-        sys.exit(1)
-
-    # -end- 以下为读取 ini 配置文件格式
-
-    if not os.path.exists(source_root):
-        logging.info(f"❌ 源目录不存在: {source_root}")
-        sys.exit(1)
-
-    os.makedirs(target_root, exist_ok=True)
-
-    logging.info(f"📂 开始递归打印目录: {source_root}")
-    logging.info(f"🖨️ 默认打印机: {DEFAULT_PRINTER}")
-    logging.info(f"🖨️ 月结单打印机: {MONTHLY_PRINTER_NAME}")
-
-    for root, dirs, files in os.walk(source_root):
-        for filename in files:
-            if filename.startswith("~$"):
-                continue  # 忽略 Excel 临时文件
-
-            filepath = os.path.join(root, filename)
-            is_monthly = is_monthly_file(filename)
+    for root, _, files in os.walk(source_root):
+        for name in files:
+            if name.startswith("~$"):
+                continue
+            full_path = os.path.join(root, name)
+            is_monthly = is_monthly_file(name)
             success = False
 
-            if filename.lower().endswith(".pdf"):
-                success = print_pdf(filepath, use_alt_printer=is_monthly)
+            if name.lower().endswith(".pdf"):
+                success = print_pdf(full_path, use_alt=is_monthly)
+            elif name.lower().endswith((".xls", ".xlsx")):
+                success = print_excel(full_path, use_alt=is_monthly)
 
-            elif filename.lower().endswith((".xls", ".xlsx")):
-                success = print_excel(filepath, use_alt_printer=is_monthly)
-
-            # ✅ 每打印完一个文件，不论成功失败，暂停 5 秒
-            time.sleep(int(DELAY_SECONDS))
+            time.sleep(DELAY_SECONDS)
 
             if success:
-                move_file_preserve_structure(filepath, source_root, target_root)
-                delete_if_empty(root)
+                move_and_cleanup(full_path, source_root, target_root)
+            else:
+                sys.exit(1)
 
-            logging.info(f"")
-
-    logging.info(f"✔️ 非常好，打印全部完成！！")
+    logging.info("✅ 所有文件打印完成")
 
 
 if __name__ == "__main__":
