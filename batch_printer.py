@@ -6,6 +6,8 @@ import win32api
 import win32print
 import pythoncom
 import win32com.client
+import logging
+from datetime import datetime
 
 # 设置打印机名称
 DEFAULT_PRINTER = win32print.GetDefaultPrinter()
@@ -18,9 +20,9 @@ def is_monthly_file(filename):
 
 # === 打印 PDF 文件 ===
 def print_pdf(file_path, use_alt_printer=False):
-    print(f"📊️ 打印 PDF: {file_path}")
+    logging.info(f"📊️ 打印 PDF: {file_path}")
     printer_name = MONTHLY_PRINTER_NAME if use_alt_printer else DEFAULT_PRINTER
-    print(f"🖨️ 打印机: {printer_name}")
+    logging.info(f"🖨️ 打印机: {printer_name}")
     try:
         win32api.ShellExecute(
             0,
@@ -30,18 +32,18 @@ def print_pdf(file_path, use_alt_printer=False):
             ".",
             0
         )
-        print("✅ PDF 打印成功")
+        logging.info("✅ PDF 打印成功")
     except Exception as e:
-        print(f"❌ PDF 打印失败: {e}")
+        logging.info(f"❌ PDF 打印失败: {e}")
 
     return True
 
 
 # === 打印 Excel 文件 ===
 def print_excel(file_path, use_alt_printer=False):
-    print(f"📊 打印 Excel: {file_path}")
+    logging.info(f"📊 打印 Excel: {file_path}")
     printer_name = MONTHLY_PRINTER_NAME if use_alt_printer else DEFAULT_PRINTER
-    print(f"🖨️ 打印机: {printer_name}")
+    logging.info(f"🖨️ 打印机: {printer_name}")
 
     pythoncom.CoInitialize()
     excel = win32com.client.Dispatch("Excel.Application")
@@ -71,9 +73,9 @@ def print_excel(file_path, use_alt_printer=False):
                 sheet.PageSetup.FitToPagesTall = False
 
         workbook.PrintOut(ActivePrinter=printer_name)
-        print(f"✅ Excel 打印成功")
+        logging.info(f"✅ Excel 打印成功")
     except Exception as e:
-        print(f"❌ Excel 打印失败: {file_path}\n   原因: {e}")
+        logging.info(f"❌ Excel 打印失败: {file_path}\n   原因: {e}")
     finally:
         try:
             if workbook:
@@ -96,7 +98,7 @@ def move_file_preserve_structure(src_file, src_root, dest_root):
     dest_dir = os.path.dirname(dest_path)
     os.makedirs(dest_dir, exist_ok=True)
     shutil.move(src_file, dest_path)
-    print(f"📁 文件已移动至: {dest_path}")
+    logging.info(f"📁 文件已移动至: {dest_path}")
 
 
 def delete_if_empty(dir_path):
@@ -104,33 +106,49 @@ def delete_if_empty(dir_path):
         files = [f for f in os.listdir(dir_path) if not f.startswith("~$")]
         if not files:
             os.rmdir(dir_path)
-            print(f"🗑️ 删除空目录: {dir_path}")
+            logging.info(f"🗑️ 删除空目录: {dir_path}")
             # 向上递归删除空目录
             parent = os.path.dirname(dir_path)
             if os.path.isdir(parent) and parent != dir_path:
                 delete_if_empty(parent)
     except Exception as e:
-        print(f"⚠️ 删除目录失败 {dir_path}: {e}")
+        logging.info(f"⚠️ 删除目录失败 {dir_path}: {e}")
 
 
 # === 主函数 ===
 def main():
     if len(sys.argv) < 3:
-        print("❗ 用法: python batch_printer_recursive_move.py <源目录> <打印成功保存目录>")
+        logging.info("❗ 用法: python batch_printer_recursive_move.py <源目录> <打印成功保存目录>")
         sys.exit(1)
 
     source_root = sys.argv[1]
     done_root = sys.argv[2]
 
     if not os.path.exists(source_root):
-        print(f"❌ 源目录不存在: {source_root}")
+        logging.info(f"❌ 源目录不存在: {source_root}")
         sys.exit(1)
 
     os.makedirs(done_root, exist_ok=True)
 
-    print(f"📂 开始递归打印目录: {source_root}")
-    print(f"🖨️ 默认打印机: {DEFAULT_PRINTER}")
-    print(f"🖨️ 月结单打印机: {MONTHLY_PRINTER_NAME}")
+    # 初始化日志文件
+    log_filename = datetime.now().strftime("log_%Y-%m-%d_%H-%M-%S.log")
+    logging.basicConfig(
+        filename=log_filename,
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        encoding='utf-8'
+    )
+
+    # 将日志输出同时发送到控制台
+    console = logging.StreamHandler()
+    console.setLevel(logging.INFO)
+    formatter = logging.Formatter('%(asctime)s - %(message)s')
+    console.setFormatter(formatter)
+    logging.getLogger().addHandler(console)
+
+    logging.info(f"📂 开始递归打印目录: {source_root}")
+    logging.info(f"🖨️ 默认打印机: {DEFAULT_PRINTER}")
+    logging.info(f"🖨️ 月结单打印机: {MONTHLY_PRINTER_NAME}")
 
     for root, dirs, files in os.walk(source_root):
         for filename in files:
@@ -150,10 +168,11 @@ def main():
             # ✅ 每打印完一个文件，不论成功失败，暂停 5 秒
             time.sleep(5)
 
-            print(f"success: {success}")
             if success:
                 move_file_preserve_structure(filepath, source_root, done_root)
                 delete_if_empty(root)
+
+            logging.info(f"")
 
 
 if __name__ == "__main__":
