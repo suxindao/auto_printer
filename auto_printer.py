@@ -17,6 +17,16 @@ if len(sys.argv) < 2:
 WATCH_FOLDER = sys.argv[1]
 PRINTER_NAME = win32print.GetDefaultPrinter()
 
+# # 获取打印机支持的纸张数量
+# try:
+#     hprinter = win32print.OpenPrinter(PRINTER_NAME)
+#     level = 1
+#     forms = win32print.EnumForms(hprinter)
+#     print(f"\n打印机 '{PRINTER_NAME}' 支持的纸张大小:")
+#     for i, form in enumerate(forms, 1):
+#         print(f"{i}. {form['Name']} (宽度: {form['Size']['cx']/1000:.1f}cm × 高度: {form['Size']['cy']/1000:.1f}cm)")
+# except Exception as e:
+#     print(f"获取纸张大小时出错: {e}")
 
 def print_pdf(file_path):
     print(f"🖨️ 正在打印 PDF 文件: {file_path}")
