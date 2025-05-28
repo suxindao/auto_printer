@@ -39,7 +39,6 @@ def print_pdf(file_path):
         0
     )
 
-
 def print_excel(file_path):
     print(f"📊 正在打印 Excel 文件: {file_path}")
     pythoncom.CoInitialize()  # 初始化当前线程的 COM 环境
