@@ -1,5 +1,5 @@
 ### 编译程序，打印指定目录下新增文件(pdf或者excel文件)
-    pyinstaller --onefile auto_printer.py
+    pyinstaller -F auto_printer.py
     
 ### 编译程序，打印指定目录下文件(pdf或者excel文件)
     pyinstaller -F batch_printer.py

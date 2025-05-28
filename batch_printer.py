@@ -8,10 +8,10 @@ import pythoncom
 import win32com.client
 import logging
 from datetime import datetime
+import configparser
 
 # 设置打印机名称
 DEFAULT_PRINTER = win32print.GetDefaultPrinter()
-MONTHLY_PRINTER_NAME = "Microsoft XPS Document Writer"  # 请替换成你的月结单打印机名称
 
 
 def is_monthly_file(filename):
@@ -64,7 +64,7 @@ def print_excel(file_path, use_alt_printer=False):
             else:
                 # 设置打印纸张为 A4（枚举值 9），其他常见值见下方
                 try:
-                    sheet.PageSetup.PaperSize = 132  # 132列纸
+                    sheet.PageSetup.PaperSize = DEFAULT_PAPER_SIZE  # 132列纸
                 except:
                     sheet.PageSetup.PaperSize = 9  # A4
                 # 设置为缩放：75% 不缩放
@@ -117,18 +117,6 @@ def delete_if_empty(dir_path):
 
 # === 主函数 ===
 def main():
-    if len(sys.argv) < 3:
-        logging.info("❗ 用法: python batch_printer_recursive_move.py <源目录> <打印成功保存目录>")
-        sys.exit(1)
-
-    source_root = sys.argv[1]
-    done_root = sys.argv[2]
-
-    if not os.path.exists(source_root):
-        logging.info(f"❌ 源目录不存在: {source_root}")
-        sys.exit(1)
-
-    os.makedirs(done_root, exist_ok=True)
 
     # 获取当前程序所在的目录（兼容 .py 和 .exe）
     base_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
@@ -154,6 +142,65 @@ def main():
     console.setFormatter(formatter)
     logging.getLogger().addHandler(console)
 
+    # -start- 以下为读取命令行参数形式
+    # if len(sys.argv) < 3:
+    #     logging.info("❗ 用法: python batch_printer_recursive_move.py <源目录> <打印成功保存目录>")
+    #     sys.exit(1)
+    #
+    # source_root = sys.argv[1]
+    # target_root = sys.argv[2]
+    #
+    # if not os.path.exists(source_root):
+    #     logging.info(f"❌ 源目录不存在: {source_root}")
+    #     sys.exit(1)
+    #
+    # -end- 以下为读取命令行参数形式
+
+    # -start- 以下为读取 ini 配置文件格式
+    # 获取程序所在目录（兼容 .exe 和 .py）
+    base_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
+
+    # 读取 INI 配置文件
+    config_path = os.path.join(base_dir, "config.ini")
+    if not os.path.exists(config_path):
+        print(f"❌ 配置文件不存在: {config_path}")
+        sys.exit(1)
+
+    config = configparser.ConfigParser()
+    config.read(config_path, encoding='utf-8')
+
+    try:
+        source_root = config.get("settings", "source_dir")
+        target_root = config.get("settings", "target_dir")
+
+        global MONTHLY_PRINTER_NAME, DEFAULT_PAPER_SIZE, DEFAULT_PAPER_ZOOM, DELAY_SECONDS
+        MONTHLY_PRINTER_NAME = config.get("settings", "monthly_printer_name")
+        DEFAULT_PAPER_SIZE = config.get("settings", "default_paper_size")
+        DEFAULT_PAPER_ZOOM = config.get("settings", "default_paper_zoom")
+        DELAY_SECONDS = config.get("settings", "delay_seconds")
+
+        logging.info(f"-------------------------")
+        logging.info(f"⚙️ 配置文件信息:")
+        logging.info(f"📂 源目录: {source_root}")
+        logging.info(f"📂 保存目录: {target_root}")
+        logging.info(f"🖨️ 月结单使用的打印机名称️: {MONTHLY_PRINTER_NAME}")
+        logging.info(f"📄 针式打印机纸张编号: {DEFAULT_PAPER_SIZE}")
+        logging.info(f"📄 针式打印机打印缩放比例: {DEFAULT_PAPER_ZOOM}")
+        logging.info(f"📄 打印间隔: {DELAY_SECONDS}")
+        logging.info(f"-------------------------")
+
+    except configparser.Error as e:
+        logging.info(f"❌ 配置文件读取错误: {e}")
+        sys.exit(1)
+
+    # -end- 以下为读取 ini 配置文件格式
+
+    if not os.path.exists(source_root):
+        logging.info(f"❌ 源目录不存在: {source_root}")
+        sys.exit(1)
+
+    os.makedirs(target_root, exist_ok=True)
+
     logging.info(f"📂 开始递归打印目录: {source_root}")
     logging.info(f"🖨️ 默认打印机: {DEFAULT_PRINTER}")
     logging.info(f"🖨️ 月结单打印机: {MONTHLY_PRINTER_NAME}")
@@ -174,13 +221,15 @@ def main():
                 success = print_excel(filepath, use_alt_printer=is_monthly)
 
             # ✅ 每打印完一个文件，不论成功失败，暂停 5 秒
-            time.sleep(5)
+            time.sleep(int(DELAY_SECONDS))
 
             if success:
-                move_file_preserve_structure(filepath, source_root, done_root)
+                move_file_preserve_structure(filepath, source_root, target_root)
                 delete_if_empty(root)
 
             logging.info(f"")
+
+    logging.info(f"✔️ 非常好，打印全部完成！！")
 
 
 if __name__ == "__main__":
