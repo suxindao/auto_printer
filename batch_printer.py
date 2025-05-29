@@ -9,6 +9,7 @@ import win32com.client
 import logging
 from datetime import datetime
 import configparser
+import ctypes  # 顶部添加此模块
 
 # 省略 imports，与你一致
 
@@ -18,7 +19,8 @@ MONTHLY_PRINTER_NAME = ""
 DEFAULT_PAPER_SIZE = 9
 DEFAULT_PAPER_ZOOM = 75
 DELAY_SECONDS = 5
-
+ENABLE_WAIT_PROMPT = True
+WAIT_PROMPT_SLEEP = 30
 
 def is_monthly_file(filename):
     return "月结单" in filename
@@ -47,7 +49,7 @@ def read_config(config_path):
     config = configparser.ConfigParser()
     config.read(config_path, encoding="utf-8")
 
-    global MONTHLY_PRINTER_NAME, DEFAULT_PAPER_SIZE, DEFAULT_PAPER_ZOOM, DELAY_SECONDS
+    global MONTHLY_PRINTER_NAME, DEFAULT_PAPER_SIZE, DEFAULT_PAPER_ZOOM, DELAY_SECONDS, ENABLE_WAIT_PROMPT, WAIT_PROMPT_SLEEP
 
     source = config.get("settings", "source_dir")
     target = config.get("settings", "target_dir")
@@ -55,6 +57,8 @@ def read_config(config_path):
     DEFAULT_PAPER_SIZE = int(config.get("settings", "default_paper_size"))
     DEFAULT_PAPER_ZOOM = int(config.get("settings", "default_paper_zoom"))
     DELAY_SECONDS = float(config.get("settings", "delay_seconds"))
+    ENABLE_WAIT_PROMPT = config.getboolean("settings", "enable_wait_prompt", fallback=True)
+    WAIT_PROMPT_SLEEP = float(config.get("settings", "wait_prompt_sleep"))
 
     logging.info(f"-------------------------")
     logging.info(f"⚙️ 配置文件信息:")
@@ -64,6 +68,7 @@ def read_config(config_path):
     logging.info(f"📄 针式打印机纸张编号: {DEFAULT_PAPER_SIZE}")
     logging.info(f"📄 针式打印机打印缩放比例: {DEFAULT_PAPER_ZOOM}")
     logging.info(f"📄 打印间隔: {DELAY_SECONDS}")
+    logging.info(f"🔔 打印完目录是否弹窗并等待: {ENABLE_WAIT_PROMPT}")
     logging.info(f"-------------------------")
 
     return source, target
@@ -166,6 +171,9 @@ def main():
     logging.info(f"📁 目标目录: {target_root}")
 
     for root, _, files in os.walk(source_root):
+
+        any_printed = False
+
         for name in files:
             if name.startswith("~$"):
                 continue
@@ -182,8 +190,27 @@ def main():
 
             if success:
                 move_and_cleanup(full_path, source_root, target_root)
+                any_printed = True
             else:
                 sys.exit(1)
+
+        if any_printed:
+            msg = f"📁 当前目录打印完成: \n{root}\n\n📢 将在 {WAIT_PROMPT_SLEEP} 秒后继续打印下一个目录..."
+            logging.info(msg)
+
+            # 0x04 = MB_YESNO + MB_ICONQUESTION
+            response = ctypes.windll.user32.MessageBoxW(
+                0,
+                msg,
+                "📢 打印完成提示",
+                0x04 | 0x20  # MB_YESNO | MB_ICONQUESTION
+            )
+
+            if response == 6:  # IDYES
+                logging.info(f"✅ 用户选择等待，等待 {WAIT_PROMPT_SLEEP} 秒...")
+                time.sleep(WAIT_PROMPT_SLEEP)
+            else:
+                logging.info("⏩ 用户选择跳过等待")
 
     logging.info("✅ 所有文件打印完成")
 
