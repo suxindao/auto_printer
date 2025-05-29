@@ -10,17 +10,19 @@ import logging
 from datetime import datetime
 import configparser
 import ctypes  # 顶部添加此模块
+import ctypes.wintypes
 
 # 省略 imports，与你一致
 
 # 全局变量
 DEFAULT_PRINTER = win32print.GetDefaultPrinter()
 MONTHLY_PRINTER_NAME = ""
-DEFAULT_PAPER_SIZE = 9
+DEFAULT_PAPER_SIZE = 132
 DEFAULT_PAPER_ZOOM = 75
 DELAY_SECONDS = 5
 ENABLE_WAIT_PROMPT = True
 WAIT_PROMPT_SLEEP = 30
+
 
 def is_monthly_file(filename):
     return "月结单" in filename
@@ -155,6 +157,33 @@ def move_and_cleanup(src_file, src_root, target_root):
     logging.warning(f"")
 
 
+def show_message_box_with_timeout(text, caption, timeout_ms):
+    MB_YESNO = 0x04
+    MB_ICONQUESTION = 0x20
+    IDYES = 6
+    IDNO = 7
+
+    MessageBoxTimeoutW = ctypes.windll.user32.MessageBoxTimeoutW
+    MessageBoxTimeoutW.restype = ctypes.c_int
+    MessageBoxTimeoutW.argtypes = [
+        ctypes.wintypes.HWND,
+        ctypes.wintypes.LPCWSTR,
+        ctypes.wintypes.LPCWSTR,
+        ctypes.wintypes.UINT,
+        ctypes.wintypes.WORD,
+        ctypes.wintypes.DWORD
+    ]
+
+    return MessageBoxTimeoutW(
+        0,  # hWnd
+        text,
+        caption,
+        MB_YESNO | MB_ICONQUESTION,
+        0,  # Default button (0 = first button)
+        timeout_ms  # Timeout in milliseconds
+    )
+
+
 def main():
     base_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
     config_path = os.path.join(base_dir, "config.ini")
@@ -179,6 +208,11 @@ def main():
                 continue
             full_path = os.path.join(root, name)
             is_monthly = is_monthly_file(name)
+
+            if is_monthly:
+                logging.info(f"⏭️ 跳过月结单文件: {full_path}")
+                continue  # ✅ 跳过打印
+
             success = False
 
             if name.lower().endswith(".pdf"):
@@ -196,14 +230,14 @@ def main():
 
         if any_printed:
             msg = f"📁 当前目录打印完成: \n{root}\n\n📢 将在 {WAIT_PROMPT_SLEEP} 秒后继续打印下一个目录..."
-            logging.info(msg)
+            logging.info(f"📁 当前目录打印完成: {root}")
+            logging.info(f"📢 将在 {WAIT_PROMPT_SLEEP} 秒后继续打印下一个目录...")
 
             # 0x04 = MB_YESNO + MB_ICONQUESTION
-            response = ctypes.windll.user32.MessageBoxW(
-                0,
+            response = show_message_box_with_timeout(
                 msg,
                 "📢 打印完成提示",
-                0x04 | 0x20  # MB_YESNO | MB_ICONQUESTION
+                int(WAIT_PROMPT_SLEEP * 1000)  # 30秒
             )
 
             if response == 6:  # IDYES
@@ -213,6 +247,12 @@ def main():
                 logging.info("⏩ 用户选择跳过等待")
 
     logging.info("✅ 所有文件打印完成")
+
+    try:
+        shutil.rmtree(source_root)
+        logging.info(f"🧹 已删除源目录: {source_root}")
+    except Exception as e:
+        logging.warning(f"⚠️ 无法删除源目录: {source_root} - {e}")
 
 
 if __name__ == "__main__":
