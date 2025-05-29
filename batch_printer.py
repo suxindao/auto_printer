@@ -77,7 +77,8 @@ def read_config(config_path):
 
 
 def print_pdf(path, use_alt=False):
-    printer = MONTHLY_PRINTER_NAME if use_alt else DEFAULT_PRINTER
+    # printer = MONTHLY_PRINTER_NAME if use_alt else DEFAULT_PRINTER
+    printer = DEFAULT_PRINTER
 
     logging.info(f"📄 打印 PDF: {path}")
     logging.info(f"🖨️ 打印机: {printer}")
@@ -92,7 +93,8 @@ def print_pdf(path, use_alt=False):
 
 
 def print_excel(path, use_alt=False):
-    printer = MONTHLY_PRINTER_NAME if use_alt else DEFAULT_PRINTER
+    # printer = MONTHLY_PRINTER_NAME if use_alt else DEFAULT_PRINTER
+    printer = DEFAULT_PRINTER
 
     logging.info(f"📊 打印 Excel: {path}")
     logging.info(f"🖨️ 打印机: {printer}")
@@ -183,8 +185,24 @@ def show_message_box_with_timeout(text, caption, timeout_ms):
         timeout_ms  # Timeout in milliseconds
     )
 
+def find_printer_name(target_name: str):
+    printers = win32print.EnumPrinters(win32print.PRINTER_ENUM_LOCAL | win32print.PRINTER_ENUM_CONNECTIONS)
+    for printer in printers:
+        name = printer[2]
+        if target_name.lower() in name.lower():
+            handle = win32print.OpenPrinter(name)
+            info = win32print.GetPrinter(handle, 2)
+            port = info["pPortName"]
+            win32print.ClosePrinter(handle)
+            return f"{name} on {port}:"
+    return None
+
 
 def main():
+    # printer = find_printer_name("A4print")
+    # print(f"{printer}")
+    # return
+
     base_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
     config_path = os.path.join(base_dir, "config.ini")
     log_dir = os.path.join(base_dir, "logs")
@@ -209,9 +227,9 @@ def main():
             full_path = os.path.join(root, name)
             is_monthly = is_monthly_file(name)
 
-            if is_monthly:
-                logging.info(f"⏭️ 跳过月结单文件: {full_path}")
-                continue  # ✅ 跳过打印
+            # if is_monthly:
+            #     logging.info(f"⏭️ 跳过月结单文件: {full_path}")
+            #     continue  # ✅ 跳过打印
 
             success = False
 
