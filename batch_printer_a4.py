@@ -55,14 +55,21 @@ def read_config(config_path):
 
     source = config.get("settings", "source_dir")
     target = config.get("settings", "target_dir")
-    MONTHLY_PRINTER_NAME = config.get("settings", "monthly_printer_name")
+
+    raw_name = config.get("settings", "monthly_printer_name")
+    MONTHLY_PRINTER_NAME = find_printer_name(raw_name)
+    if not MONTHLY_PRINTER_NAME:
+        logging.error(f"❌ 未找到包含 '{raw_name}' 的打印机，请检查名称是否正确")
+    else:
+        logging.info(f"🖨️ 识别出的月结单打印机: {MONTHLY_PRINTER_NAME}")
+
     DEFAULT_PAPER_SIZE = int(config.get("settings", "default_paper_size"))
     DEFAULT_PAPER_ZOOM = int(config.get("settings", "default_paper_zoom"))
     DELAY_SECONDS = float(config.get("settings", "delay_seconds"))
     ENABLE_WAIT_PROMPT = config.getboolean("settings", "enable_wait_prompt", fallback=True)
     WAIT_PROMPT_SLEEP = float(config.get("settings", "wait_prompt_sleep"))
 
-    logging.info(f"-------------------------")
+    logging.info(f"--------------------------------------------------")
     logging.info(f"⚙️ 配置文件信息:")
     logging.info(f"📂 源目录: {source}")
     logging.info(f"📂 保存目录: {target}")
@@ -71,14 +78,13 @@ def read_config(config_path):
     logging.info(f"📄 针式打印机打印缩放比例: {DEFAULT_PAPER_ZOOM}")
     logging.info(f"📄 打印间隔: {DELAY_SECONDS}")
     logging.info(f"🔔 打印完目录是否弹窗并等待: {ENABLE_WAIT_PROMPT}")
-    logging.info(f"-------------------------")
+    logging.info(f"--------------------------------------------------")
 
     return source, target
 
 
 def print_pdf(path, use_alt=False):
-    # printer = MONTHLY_PRINTER_NAME if use_alt else DEFAULT_PRINTER
-    printer = DEFAULT_PRINTER
+    printer = MONTHLY_PRINTER_NAME if use_alt else DEFAULT_PRINTER
 
     logging.info(f"📄 打印 PDF: {path}")
     logging.info(f"🖨️ 打印机: {printer}")
@@ -92,12 +98,44 @@ def print_pdf(path, use_alt=False):
         return False
 
 
+def get_excel_printer_name(target_name: str):
+    """
+    查找指定打印机名对应的 Excel 可识别的打印机格式，例如 "A4Print on Ne01:"
+    忽略掉如 PORTPROMPT:、NUL: 这样的无效端口
+    """
+    printers = win32print.EnumPrinters(win32print.PRINTER_ENUM_LOCAL | win32print.PRINTER_ENUM_CONNECTIONS)
+    for printer in printers:
+        name = printer[2]
+        if target_name.lower() in name.lower():
+            try:
+                handle = win32print.OpenPrinter(name)
+                info = win32print.GetPrinter(handle, 2)
+                port = info["pPortName"]
+                win32print.ClosePrinter(handle)
+
+                # Excel 不接受一些特殊端口
+                if port.upper() in ["PORTPROMPT:", "NUL:"]:
+                    logging.warning(f"⚠️ 打印机 '{name}' 的端口 '{port}' 不适用于 Excel 打印")
+                    return None
+
+                return f"{name} on {port}:"
+            except Exception as e:
+                logging.error(f"❌ 获取打印机端口失败: {name} - {e}")
+                return None
+    logging.error(f"❌ 未找到匹配的打印机: {target_name}")
+    return None
+
+
 def print_excel(path, use_alt=False):
-    # printer = MONTHLY_PRINTER_NAME if use_alt else DEFAULT_PRINTER
-    printer = DEFAULT_PRINTER
+    # printer_name = MONTHLY_PRINTER_NAME if use_alt else DEFAULT_PRINTER
+    excel_printer = get_excel_printer_name(MONTHLY_PRINTER_NAME) if use_alt else DEFAULT_PRINTER
+
+    if not excel_printer:
+        logging.error(f"❌ 找不到可识别的打印机格式: {excel_printer}")
+        return False
 
     logging.info(f"📊 打印 Excel: {path}")
-    logging.info(f"🖨️ 打印机: {printer}")
+    logging.info(f"🖨️ 打印机: {excel_printer}")
 
     pythoncom.CoInitialize()
     excel = win32com.client.Dispatch("Excel.Application")
@@ -105,30 +143,34 @@ def print_excel(path, use_alt=False):
     excel.DisplayAlerts = False
 
     try:
+        excel.ActivePrinter = excel_printer
         wb = excel.Workbooks.Open(path, ReadOnly=True)
+
         for sheet in wb.Sheets:
             if use_alt:
+                # 月结单（用 A4 打印机）
                 sheet.PageSetup.PaperSize = 9  # A4
                 sheet.PageSetup.Zoom = False
                 sheet.PageSetup.FitToPagesWide = 1
                 sheet.PageSetup.FitToPagesTall = 1
-                sheet.PageSetup.Orientation = 1
             else:
+                # 默认针式打印
                 try:
                     sheet.PageSetup.PaperSize = DEFAULT_PAPER_SIZE  # 132列纸
-                except:
+                except Exception:
                     sheet.PageSetup.PaperSize = 9  # A4
                 sheet.PageSetup.Zoom = DEFAULT_PAPER_ZOOM
                 sheet.PageSetup.FitToPagesWide = False
                 sheet.PageSetup.FitToPagesTall = False
-                sheet.PageSetup.Orientation = 1
 
-        wb.PrintOut(ActivePrinter=printer)
+        wb.PrintOut()
         logging.info(f"✅ 打印成功 (Excel)")
         return True
+
     except Exception as e:
         logging.error(f"❌ 打印失败 (Excel): {e}")
         return False
+
     finally:
         try:
             wb.Close(False)
@@ -146,7 +188,7 @@ def move_and_cleanup(src_file, src_root, target_root):
     dest_file = os.path.join(target_root, rel_path)
     os.makedirs(os.path.dirname(dest_file), exist_ok=True)
     shutil.move(src_file, dest_file)
-    logging.info(f"📁 已移动文件: {dest_file}")
+    logging.info(f"📁 已移动文件: {src_file}")
 
     # 删除空目录
     src_dir = os.path.dirname(src_file)
@@ -187,6 +229,7 @@ def show_message_box_with_timeout(text, caption, timeout_ms):
         timeout_ms  # Timeout in milliseconds
     )
 
+
 def find_printer_name(target_name: str):
     printers = win32print.EnumPrinters(win32print.PRINTER_ENUM_LOCAL | win32print.PRINTER_ENUM_CONNECTIONS)
     for printer in printers:
@@ -200,9 +243,20 @@ def find_printer_name(target_name: str):
     return None
 
 
+def list_excel_printers():
+    pythoncom.CoInitialize()
+    excel = win32com.client.Dispatch("Excel.Application")
+    for printer in excel.Application.ActivePrinter:
+        print(f"ActivePrinter: {printer}")
+    pythoncom.CoUninitialize()
+
+
 def main():
     # printer = find_printer_name("A4print")
     # print(f"{printer}")
+    # return
+
+    # list_excel_printers()
     # return
 
     base_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
