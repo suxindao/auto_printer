@@ -123,7 +123,7 @@ def print_excel(path, use_alt=False):
                 sheet.PageSetup.FitToPagesTall = False
                 sheet.PageSetup.Orientation = 1
 
-        wb.PrintOut(ActivePrinter=printer)
+        wb.PrintOut(From=1, To=1, ActivePrinter=printer)
         logging.info(f"✅ 打印成功 (Excel)")
         return True
     except Exception as e:
