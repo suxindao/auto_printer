@@ -101,7 +101,7 @@ def print_excel(path, use_alt=False):
     printer = DEFAULT_PRINTER
 
     # 打印一个空行
-    logging.warning(f"")
+    logging.info(f"")
 
     logging.info(f"📊 打印 Excel: {path}")
     logging.info(f"🖨️ 打印机: {printer}")
