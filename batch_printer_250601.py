@@ -54,11 +54,7 @@ def read_config(config_path):
     global MONTHLY_PRINTER_NAME, DEFAULT_PAPER_SIZE, DEFAULT_PAPER_ZOOM, DELAY_SECONDS, ENABLE_WAIT_PROMPT, WAIT_PROMPT_SLEEP
 
     source = config.get("settings", "source_dir")
-    # target = config.get("settings", "target_dir")
-    # 自动生成目标目录 = 源目录 + "_打印备份_YYYY-MM-DD"
-    today_str = datetime.now().strftime("%Y-%m-%d")
-    target = f"{source}_打印备份_{today_str}"
-
+    target = config.get("settings", "target_dir")
     MONTHLY_PRINTER_NAME = config.get("settings", "monthly_printer_name")
     DEFAULT_PAPER_SIZE = int(config.get("settings", "default_paper_size"))
     DEFAULT_PAPER_ZOOM = int(config.get("settings", "default_paper_zoom"))
@@ -99,9 +95,6 @@ def print_pdf(path, use_alt=False):
 def print_excel(path, use_alt=False):
     # printer = MONTHLY_PRINTER_NAME if use_alt else DEFAULT_PRINTER
     printer = DEFAULT_PRINTER
-
-    # 打印一个空行
-    logging.warning(f"")
 
     logging.info(f"📊 打印 Excel: {path}")
     logging.info(f"🖨️ 打印机: {printer}")
@@ -164,6 +157,9 @@ def move_and_cleanup(src_file, src_root, target_root):
         except Exception as e:
             logging.warning(f"⚠️ 删除目录失败: {src_dir} - {e}")
 
+    # 打印一个空行
+    logging.warning(f"")
+
 
 def show_message_box_with_timeout(text, caption, timeout_ms):
     MB_YESNO = 0x04
@@ -190,7 +186,6 @@ def show_message_box_with_timeout(text, caption, timeout_ms):
         0,  # Default button (0 = first button)
         timeout_ms  # Timeout in milliseconds
     )
-
 
 def find_printer_name(target_name: str):
     printers = win32print.EnumPrinters(win32print.PRINTER_ENUM_LOCAL | win32print.PRINTER_ENUM_CONNECTIONS)
@@ -224,7 +219,7 @@ def main():
     logging.info(f"📂 监听目录: {source_root}")
     logging.info(f"📁 目标目录: {target_root}")
 
-    for root, _, files in os.walk(source_root, topdown=False):
+    for root, _, files in os.walk(source_root):
 
         any_printed = False
 
@@ -254,12 +249,7 @@ def main():
                 sys.exit(1)
 
         if any_printed:
-            msg = (
-                f"📁 当前目录打印完成: \n{root}\n\n📢 将在 {WAIT_PROMPT_SLEEP} 秒后继续打印下一个目录..."
-                "请选择操作：\n"
-                f"【是】 = 是的，继续等待 {WAIT_PROMPT_SLEEP} 秒\n"
-                "【否】 = 继续打印"
-            )
+            msg = f"📁 当前目录打印完成: \n{root}\n\n📢 将在 {WAIT_PROMPT_SLEEP} 秒后继续打印下一个目录..."
             logging.info(f"📁 当前目录打印完成: {root}")
             logging.info(f"📢 将在 {WAIT_PROMPT_SLEEP} 秒后继续打印下一个目录...")
 
@@ -278,12 +268,11 @@ def main():
 
     logging.info("✅ 所有文件打印完成")
 
-    # 删除源根目录
-    # try:
-    #     shutil.rmtree(source_root)
-    #     logging.info(f"🧹 已删除源目录: {source_root}")
-    # except Exception as e:
-    #     logging.warning(f"⚠️ 无法删除源目录: {source_root} - {e}")
+    try:
+        shutil.rmtree(source_root)
+        logging.info(f"🧹 已删除源目录: {source_root}")
+    except Exception as e:
+        logging.warning(f"⚠️ 无法删除源目录: {source_root} - {e}")
 
 
 if __name__ == "__main__":
