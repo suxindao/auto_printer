@@ -155,12 +155,10 @@ def move_and_cleanup(src_file, src_root, target_root):
     shutil.move(src_file, dest_file)
     logging.info(f"📁 已移动文件: {dest_file}")
 
-    # 删除空目录
     src_dir = os.path.dirname(src_file)
 
-    while src_dir != src_root:
-        if not os.path.exists(src_dir):
-            break  # 路径已不存在，不能继续
+    # 删除空目录，根目录（源目录）不删除
+    if src_dir != src_root:
         if not any(f for f in os.listdir(src_dir) if not f.startswith("~$")):
             try:
                 os.rmdir(src_dir)
@@ -228,9 +226,8 @@ def main():
     logging.info(f"📂 监听目录: {source_root}")
     logging.info(f"📁 目标目录: {target_root}")
 
+    # 遍历根目录，topdown=False 从里往外层遍历
     for root, _, files in os.walk(source_root, topdown=False):
-
-        any_printed = False
 
         for name in files:
             if name.startswith("~$"):
@@ -251,37 +248,35 @@ def main():
 
             if success:
                 move_and_cleanup(full_path, source_root, target_root)
-                any_printed = True
             else:
                 sys.exit(1)
 
             time.sleep(DELAY_SECONDS)
 
-        if any_printed:
-            msg = (
-                f"📁 当前目录打印完成: \n{root}\n\n📢 将在 {WAIT_PROMPT_SLEEP} 秒后继续打印下一个目录..."
-                "请选择操作：\n"
-                f"【是】 = 是的，继续等待 {WAIT_PROMPT_SLEEP} 秒\n"
-                "【否】 = 继续打印"
-            )
-            logging.info(f"📁 当前目录打印完成: {root}")
-            logging.info(f"📢 将在 {WAIT_PROMPT_SLEEP} 秒后继续打印下一个目录...")
+        # 当前目录文件打印完后，提示用户等待30秒
+        msg = (
+            f"📁 当前目录打印完成: \n{root}\n\n📢 将在 {WAIT_PROMPT_SLEEP} 秒后继续打印下一个目录..."
+            "请选择操作：\n"
+            f"【是】 = 是的，继续等待 {WAIT_PROMPT_SLEEP} 秒\n"
+            "【否】 = 继续打印"
+        )
+        logging.info(f"📁 当前目录打印完成: {root}")
+        logging.info(f"📢 将在 {WAIT_PROMPT_SLEEP} 秒后继续打印下一个目录...")
 
-            # 0x04 = MB_YESNO + MB_ICONQUESTION
-            response = show_message_box_with_timeout(
-                msg,
-                "📢 打印完成提示",
-                int(WAIT_PROMPT_SLEEP * 1000)  # 30秒
-            )
+        # 0x04 = MB_YESNO + MB_ICONQUESTION
+        response = show_message_box_with_timeout(
+            msg,
+            "📢 打印完成提示",
+            int(WAIT_PROMPT_SLEEP * 1000)  # 30秒
+        )
 
-            if response == 6:  # IDYES
-                logging.info(f"✅ 用户选择等待，等待 {WAIT_PROMPT_SLEEP} 秒...")
-                time.sleep(WAIT_PROMPT_SLEEP)
-            else:
-                logging.info("⏩ 用户选择跳过等待")
+        if response == 6:  # IDYES
+            logging.info(f"✅ 用户选择等待，等待 {WAIT_PROMPT_SLEEP} 秒...")
+            time.sleep(WAIT_PROMPT_SLEEP)
+        else:
+            logging.info("⏩ 用户选择跳过等待")
 
-    logging.info("✅ 所有文件打印完成")
-
+    # 以下是删除源目录
     # ❗️重要：不要删除源目录，只清理空子目录即可
     # ❌ 禁止启用以下代码，否则源目录将被删除
     # try:
@@ -289,6 +284,8 @@ def main():
     #     logging.info(f"🧹 已删除源目录: {source_root}")
     # except Exception as e:
     #     logging.warning(f"⚠️ 无法删除源目录: {source_root} - {e}")
+
+    logging.info("✅ 所有文件打印完成")
 
 
 if __name__ == "__main__":
