@@ -249,13 +249,13 @@ def main():
             elif name.lower().endswith((".xls", ".xlsx")):
                 success = print_excel(full_path, use_alt=is_monthly)
 
-            time.sleep(DELAY_SECONDS)
-
             if success:
                 move_and_cleanup(full_path, source_root, target_root)
                 any_printed = True
             else:
                 sys.exit(1)
+
+            time.sleep(DELAY_SECONDS)
 
         if any_printed:
             msg = (
