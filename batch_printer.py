@@ -168,8 +168,8 @@ def move_and_cleanup(src_file, src_root, target_root):
 
 
 def show_message_box_with_timeout(text, caption, timeout_ms):
-    MB_YESNO = 0x04
-    MB_ICONQUESTION = 0x20
+    MB_OK = 0x00
+    MB_ICONINFORMATION = 0x40
     IDYES = 6
     IDNO = 7
 
@@ -188,7 +188,7 @@ def show_message_box_with_timeout(text, caption, timeout_ms):
         0,  # hWnd
         text,
         caption,
-        MB_YESNO | MB_ICONQUESTION,
+        MB_OK | MB_ICONINFORMATION,
         0,  # Default button (0 = first button)
         timeout_ms  # Timeout in milliseconds
     )
@@ -253,27 +253,30 @@ def main():
 
             time.sleep(DELAY_SECONDS)
 
-        # 当前目录文件打印完后，提示用户等待30秒
-        msg = (
-            f"📁 当前目录打印完成: \n{root}\n\n📢 将在 {WAIT_PROMPT_SLEEP} 秒后继续打印下一个目录..."
-            "请选择操作：\n"
-            f"【是】 = 是的，继续等待 {WAIT_PROMPT_SLEEP} 秒\n"
-            "【否】 = 继续打印"
-        )
-        logging.info(f"📁 当前目录打印完成: {root}")
-        logging.info(f"📢 将在 {WAIT_PROMPT_SLEEP} 秒后继续打印下一个目录...")
+        # 如果诊所目录文件全部打印完后，提示用户等待30秒
+        if os.path.basename(root).isdigit():
+            msg = (
+                f"📁 当前诊所打印完成: {os.path.basename(root)}\n📢 将在 {WAIT_PROMPT_SLEEP} 秒后继续打印下一个诊所...\n"
+                "\n"
+                "【确定】 = 不等待，立即打印"
+            )
+            logging.info(f"📁 当前诊所打印完成: {os.path.basename(root)}")
+            logging.info(f"📢 将在 {WAIT_PROMPT_SLEEP} 秒后继续打印下一个诊所...")
 
-        # 0x04 = MB_YESNO + MB_ICONQUESTION
-        response = show_message_box_with_timeout(
-            msg,
-            "📢 打印完成提示",
-            int(WAIT_PROMPT_SLEEP * 1000)  # 30秒
-        )
+            # 0x04 = MB_YESNO + MB_ICONQUESTION
+            response = show_message_box_with_timeout(
+                msg,
+                "📢 打印完成",
+                int(WAIT_PROMPT_SLEEP * 1000)  # 30秒
+            )
 
-        if response == 6:  # IDYES
-            logging.info(f"✅ 用户选择等待，等待 {WAIT_PROMPT_SLEEP} 秒...")
-            time.sleep(WAIT_PROMPT_SLEEP)
-        else:
+            # if response == 6:  # IDYES
+            #     logging.info(f"✅ 用户选择等待，等待 {WAIT_PROMPT_SLEEP} 秒...")
+            #     time.sleep(WAIT_PROMPT_SLEEP)
+            # else:
+            #     logging.info("⏩ 用户选择跳过等待")
+
+            # 只显示一个按钮，点击继续打印
             logging.info("⏩ 用户选择跳过等待")
 
     # 以下是删除源目录
